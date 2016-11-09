@@ -63,6 +63,7 @@ import Test.Framework.Providers.HUnit (testCase)
 import Test.HUnit ((@=?))
 import Google.Test (googleTest)
 import qualified Data.Vector as V
+import qualified TensorFlow.GenOps.Core as CoreOps
 
 -- | Test named behavior.
 testNamed = testCase "testNamed" $ do
@@ -91,20 +92,19 @@ testPureRender = testCase "testPureRender" $ runSession $ do
 -- | Test that "run" assigns any previously accumulated initializers.
 testInitializedVariable =
     testCase "testInitializedVariable" $ runSession $ do
-        (formula, reset) <- build $ do
+        (v, formula) <- build $ do
             v <- initializedVariable 42
-            r <- assign v 24
-            return (1 `add` v, r)
+            return (v, 1 `add` CoreOps.readVariableOp v)
         result <- run formula
         liftIO $ 43 @=? (unScalar result :: Float)
-        run_ reset  -- Updates v to a different value
+        run_ (CoreOps.assignVariableOp v 24)
         rerunResult <- run formula
         liftIO $ 25 @=? (unScalar rerunResult :: Float)
 
 testInitializedVariableShape =
     testCase "testInitializedVariableShape" $ runSession $ do
         vector <- build $ initializedVariable (constant [1] [42 :: Float])
-        result <- run vector
+        result <- run (CoreOps.readVariableOp vector)
         liftIO $ [42] @=? (result :: V.Vector Float)
 
 -- | Test nameScoped behavior.

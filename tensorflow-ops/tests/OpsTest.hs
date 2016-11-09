@@ -31,8 +31,10 @@ import qualified TensorFlow.Build as TF
 import qualified TensorFlow.ControlFlow as TF
 import qualified TensorFlow.Nodes as TF
 import qualified TensorFlow.Ops as TF
+import qualified TensorFlow.Output as TF
 import qualified TensorFlow.Session as TF
 import qualified TensorFlow.Tensor as TF
+import qualified TensorFlow.GenOps.Core as CoreOps
 
 -- | Test that one can easily determine number of elements in the tensor.
 testSize = testCase "testSize" $ do
@@ -50,16 +52,15 @@ testReducedShape = testCase "testReducedShape" $ do
 testSaveRestore = testCase "testSaveRestore" $
     withSystemTempDirectory "" $ \dirPath -> do
         let path = B8.pack $ dirPath ++ "/checkpoint"
-            var :: TF.Build (TF.Tensor TF.Ref Float)
-            var = TF.render =<< TF.named "a" <$> TF.zeroInitializedVariable []
+            var = TF.zeroInitializedVariable [] :: TF.Build (TF.ResourceHandle Float)
         TF.runSession $ do
             v <- TF.build var
-            TF.buildAnd TF.run_ $ TF.assign v 134
+            TF.buildAnd TF.run_ $ TF.group $ CoreOps.assignVariableOp v 134
             TF.buildAnd TF.run_ $ TF.save path [v]
         result <- TF.runSession $ do
             v <- TF.build var
             TF.buildAnd TF.run_ $ TF.restore path v
-            TF.run v
+            TF.run (CoreOps.readVariableOp v)
         liftIO $ TF.Scalar 134 @=? result
 
 
