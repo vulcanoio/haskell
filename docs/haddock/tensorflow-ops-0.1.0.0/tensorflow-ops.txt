@@ -388,24 +388,6 @@ sub :: (TensorType t, OneOf ((:) * (Complex Double) ((:) * (Complex Float) ((:) 
 --   dimensions are retained with length 1.
 sum :: (TensorType t, OneOf ((:) * (Complex Double) ((:) * (Complex Float) ((:) * Int16 ((:) * Int32 ((:) * Int64 ((:) * Int8 ((:) * Word16 ((:) * Word8 ((:) * Double ((:) * Float ([] *))))))))))) t, TensorType tidx, OneOf ((:) * Int32 ((:) * Int64 ([] *))) tidx) => Tensor v1 t -> Tensor v2 tidx -> Tensor Value t
 
--- | Finds values and indices of the <tt>k</tt> largest elements for the
---   last dimension.
---   
---   If the input is a vector (rank-1), finds the <tt>k</tt> largest
---   entries in the vector and outputs their values and indices as vectors.
---   Thus `values[j]` is the <tt>j</tt>-th largest entry in <tt>input</tt>,
---   and its index is `indices[j]`.
---   
---   For matrices (resp. higher rank input), computes the top <tt>k</tt>
---   entries in each row (resp. vector along the last dimension). Thus,
---   
---   values.shape = indices.shape = input.shape[:-1] + [k]
---   
---   If two elements are equal, the lower-index element appears first.
---   
---   If <tt>k</tt> varies dynamically, use <tt>TopKV2</tt> below.
-topK :: (TensorType t, OneOf ((:) * Int16 ((:) * Int32 ((:) * Int64 ((:) * Int8 ((:) * Word16 ((:) * Word8 ((:) * Double ((:) * Float ([] *))))))))) t) => Int64 -> Tensor v1 t -> (Tensor Value t, Tensor Value Int32)
-
 -- | Shuffle dimensions of x according to a permutation.
 --   
 --   The output <tt>y</tt> has the same rank as <tt>x</tt>. The shapes of
