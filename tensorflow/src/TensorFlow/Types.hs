@@ -28,6 +28,7 @@
 
 module TensorFlow.Types
     ( TensorType(..)
+    , VectorType
     , TensorData(..)
     , Shape(..)
     , protoShape
@@ -45,6 +46,7 @@ module TensorFlow.Types
     , AllTensorTypes
     ) where
 
+import Text.Printf (printf)
 import Data.Complex (Complex)
 import Data.Default (def)
 import Data.Int (Int8, Int16, Int32, Int64)
@@ -62,6 +64,7 @@ import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as L
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as S
+import qualified Data.Vector.Generic as G
 import Proto.Tensorflow.Core.Framework.AttrValue
     ( AttrValue(..)
     , AttrValue'ListValue(..)
@@ -97,13 +100,18 @@ import qualified TensorFlow.Internal.FFI as FFI
 -- | Data about a tensor that is encoded for the TensorFlow APIs.
 newtype TensorData a = TensorData { unTensorData :: FFI.TensorData }
 
+-- Vector type to use for encode/decode.
+type family VectorType a where
+  VectorType ByteString = V.Vector
+  VectorType a = S.Vector
+
 -- | The class of scalar types supported by tensorflow.
-class TensorType a where
+class (G.Vector (VectorType a) a) => TensorType a where
     tensorType :: a -> DataType
     tensorRefType :: a -> DataType
     tensorVal :: Lens' TensorProto [a]
     -- | Decode the bytes of a TensorData into a Vector.
-    decodeTensorData :: TensorData a -> V.Vector a
+    decodeTensorData :: TensorData a -> VectorType a a
     -- | Encode a Vector into a TensorData.
     --
     -- The values should be in row major order, e.g.,
@@ -111,19 +119,23 @@ class TensorType a where
     --   element 0:   index (0, ..., 0)
     --   element 1:   index (0, ..., 1)
     --   ...
-    encodeTensorData :: Shape -> V.Vector a -> TensorData a
+    encodeTensorData :: Shape -> VectorType a a -> TensorData a
 
 -- All types, besides ByteString, are encoded as simple arrays and we can use
 -- Vector.Storable to encode/decode by type casting pointers.
 
 -- TODO(fmayle): Assert that the data type matches the return type.
-simpleDecode :: Storable a => TensorData a -> V.Vector a
-simpleDecode = S.convert . S.unsafeCast . FFI.tensorDataBytes . unTensorData
+simpleDecode :: Storable a => TensorData a -> S.Vector a
+simpleDecode = S.unsafeCast . FFI.tensorDataBytes . unTensorData
 
 simpleEncode :: forall a . (TensorType a, Storable a)
-             => Shape -> V.Vector a -> TensorData a
-simpleEncode (Shape xs)
-    = TensorData . FFI.TensorData xs dt . S.unsafeCast . S.convert
+             => Shape -> S.Vector a -> TensorData a
+simpleEncode (Shape xs) v =
+    if product xs /= fromIntegral (S.length v)
+        then error $ printf
+            "simpleEncode: bad vector length for shape %v: expected=%d got=%d"
+            (show xs) (product xs) (S.length v)
+        else TensorData (FFI.TensorData xs dt (S.unsafeCast v))
   where
     dt = tensorType (undefined :: a)
 

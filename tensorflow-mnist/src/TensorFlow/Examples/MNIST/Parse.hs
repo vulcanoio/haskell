@@ -32,20 +32,20 @@ import Prelude hiding (readFile)
 import qualified Codec.Compression.GZip as GZip
 import qualified Data.ByteString.Lazy as L
 import qualified Data.Text as Text
-import qualified Data.Vector as V
+import qualified Data.Vector.Storable as S
 
 -- | Utilities specific to MNIST.
-type MNIST = V.Vector Word8
+type MNIST = S.Vector Word8
 
 -- | Produces a unicode rendering of the MNIST digit sample.
 drawMNIST :: MNIST -> Text
 drawMNIST = chunk . block
   where
-    block :: V.Vector Word8 -> Text
-    block (V.splitAt 1 -> ([0], xs)) = " " <> block xs
-    block (V.splitAt 1 -> ([n], xs)) = c `Text.cons` block xs
+    block :: S.Vector Word8 -> Text
+    block (S.splitAt 1 -> ([0], xs)) = " " <> block xs
+    block (S.splitAt 1 -> ([n], xs)) = c `Text.cons` block xs
       where c = "\9617\9618\9619\9608" !! fromIntegral (n `div` 64)
-    block (V.splitAt 1 -> _)   = ""
+    block (S.splitAt 1 -> _)   = ""
     chunk :: Text -> Text
     chunk "" = "\n"
     chunk xs = Text.take 28 xs <> "\n" <> chunk (Text.drop 28 xs)
@@ -72,7 +72,7 @@ readMNISTSamples path = do
         cols <- liftM fromIntegral getWord32be
         -- Read all of the data, then split into samples.
         pixels <- getLazyByteString $ fromIntegral $ cnt * rows * cols
-        return $ V.fromList <$> chunksOf (rows * cols) (L.unpack pixels)
+        return $ S.fromList <$> chunksOf (rows * cols) (L.unpack pixels)
 
 -- | Reads a list of MNIST labels from a file and returns them.
 readMNISTLabels :: FilePath -> IO [Word8]

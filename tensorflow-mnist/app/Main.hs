@@ -14,13 +14,15 @@
 
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE TypeFamilies #-}
 
 import Control.Monad (zipWithM, when, forM, forM_)
 import Control.Monad.IO.Class (liftIO)
 import Data.Int (Int32, Int64)
+import Data.Word (Word8)
 import Data.List (genericLength)
 import qualified Data.Text.IO as T
-import qualified Data.Vector as V
+import qualified Data.Vector.Storable as S
 
 import qualified TensorFlow.Build as TF
 import qualified TensorFlow.ControlFlow as TF
@@ -54,7 +56,7 @@ data Model = Model {
             -> TF.TensorData LabelType
             -> TF.Session ()
     , infer :: TF.TensorData Float  -- ^ images
-            -> TF.Session (V.Vector LabelType)  -- ^ predictions
+            -> TF.Session (S.Vector LabelType)  -- ^ predictions
     , errorRate :: TF.TensorData Float  -- ^ images
                 -> TF.TensorData LabelType
                 -> TF.Session Float
@@ -110,7 +112,7 @@ createModel = do
 
 main = TF.runSession $ do
     -- Read training and test data.
-    trainingImages <- liftIO (readMNISTSamples =<< trainingImageData)
+    trainingImages  <- liftIO ((readMNISTSamples =<< trainingImageData) :: IO [S.Vector Word8])
     trainingLabels <- liftIO (readMNISTLabels =<< trainingLabelData)
     testImages <- liftIO (readMNISTSamples =<< testImageData)
     testLabels <- liftIO (readMNISTLabels =<< testLabelData)
@@ -121,12 +123,13 @@ main = TF.runSession $ do
     -- Functions for generating batches.
     let encodeImageBatch xs =
             TF.encodeTensorData [genericLength xs, numPixels]
-                                (fromIntegral <$> mconcat xs)
+                                (S.map (fromIntegral :: Word8 -> Float) (mconcat xs))
     let encodeLabelBatch xs =
             TF.encodeTensorData [genericLength xs]
-                                (fromIntegral <$> V.fromList xs)
+                                (S.map fromIntegral (S.fromList xs))
     let batchSize = 100
-    let selectBatch i xs = take batchSize $ drop (i * batchSize) (cycle xs)
+    let selectBatch :: Int -> [a] -> [a]
+        selectBatch i xs = take batchSize $ drop (i * batchSize) (cycle xs)
 
     -- Train.
     forM_ ([0..1000] :: [Int]) $ \i -> do
@@ -149,4 +152,4 @@ main = TF.runSession $ do
         putStrLn ""
         T.putStrLn $ drawMNIST $ testImages !! i
         putStrLn $ "expected " ++ show (testLabels !! i)
-        putStrLn $ "     got " ++ show (testPreds V.! i)
+        putStrLn $ "     got " ++ show (testPreds S.! i)

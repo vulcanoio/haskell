@@ -30,6 +30,8 @@ import Lens.Family2 ((^.))
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Vector as V
+import qualified Data.Vector.Generic as G
+import qualified Data.Vector.Storable as S
 
 import TensorFlow.Build
 import TensorFlow.Output
@@ -101,11 +103,8 @@ instance a ~ () => Fetchable ControlNode a where
 instance Nodes (Tensor v a) where
     getNodes t = Set.singleton <$> getOrAddOp (t ^. tensorOutput . outputOp)
 
-fetchTensorList :: TensorType a => Tensor v a -> Build (Fetch (Shape, [a]))
-fetchTensorList t = fmap (fmap V.toList) <$> fetchTensorVector t
-
 fetchTensorVector :: forall a v . TensorType a
-                  => Tensor v a -> Build (Fetch (Shape, V.Vector a))
+                  => Tensor v a -> Build (Fetch (Shape, VectorType a a))
 fetchTensorVector (Tensor _ o) = do
     outputName <- renderOutput o
     return $ Fetch (Set.singleton outputName) $ \tensors ->
@@ -125,7 +124,12 @@ fetchTensorVector (Tensor _ o) = do
 
 -- The constraint "a ~ a'" means that the input/output of fetch can constrain
 -- the TensorType of each other.
-instance (TensorType a, a ~ a') => Fetchable (Tensor v a) (V.Vector a') where
+instance (TensorType a, a ~ a', VectorType a' ~ V.Vector)
+    => Fetchable (Tensor v a) (V.Vector a') where
+    getFetch t = fmap snd <$> fetchTensorVector t
+
+instance (TensorType a, a ~ a', VectorType a' ~ S.Vector)
+    => Fetchable (Tensor v a) (S.Vector a') where
     getFetch t = fmap snd <$> fetchTensorVector t
 
 newtype Scalar a = Scalar {unScalar :: a}
@@ -133,9 +137,11 @@ newtype Scalar a = Scalar {unScalar :: a}
               RealFrac, IsString)
 
 instance (TensorType a, a ~ a') => Fetchable (Tensor v a) (Scalar a') where
-    getFetch t = fmap (Scalar . headFromSingleton . snd) <$> fetchTensorList t
-      where
-        headFromSingleton [x] = x
-        headFromSingleton xs
-            = error $ "Unable to extract singleton from tensor of length "
-                          ++ show (length xs)
+    getFetch t = fmap (Scalar . headFromSingleton . snd) <$> fetchTensorVector t
+
+headFromSingleton :: G.Vector v a => v a -> a
+headFromSingleton x
+    | G.length x == 1 = G.head x
+    | otherwise = error $
+                  "Unable to extract singleton from tensor of length "
+                  ++ show (G.length x)
